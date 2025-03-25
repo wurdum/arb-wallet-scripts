@@ -18,9 +18,9 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@arbitrum/sdk": "^2.0.0",
+    "@arbitrum/sdk": "^3.7.2",
     "dotenv": "^16.4.1",
-    "ethers": "^6.10.0"
+    "ethers": "^5.8.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.16",

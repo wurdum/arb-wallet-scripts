@@ -1,13 +1,11 @@
-// src/index.ts
-import { ethers } from "ethers";
 import * as dotenv from "dotenv";
 
 import { balanceCommand } from "./balance";
 import { transferCommand } from "./l2transfer";
+import { depositEthCommand } from "./l1transfer";
 
 // Load environment variables
 dotenv.config();
-
 
 async function main() {
   // Get command and arguments
@@ -20,6 +18,9 @@ async function main() {
       break;
     case "l2transfer":
       await transferCommand(args);
+      break;
+    case "l1deposit":
+      await depositEthCommand(args);
       break;
     default:
       console.error(`Unknown command: ${command}`);
