@@ -8,6 +8,7 @@ import {
   getL2Network,
   addDefaultLocalNetwork,
   L2Network,
+  addCustomNetwork,
 } from "@arbitrum/sdk/dist/lib/dataEntities/networks";
 import { checkBalance } from "./balance";
 
@@ -87,10 +88,10 @@ export async function depositEthCommand(args: string[]) {
     const l1Network = await l1Provider.getNetwork();
     const l2Network = await l2Provider.getNetwork();
     console.log(
-      `Connected to L1 network: ${l1Network.name} (chainId: ${l1Network.chainId})`
+      `Connected to L1 network: ${l1Network.name} (chainId: ${l1Network.chainId})`,
     );
     console.log(
-      `Connected to L2 network: ${l2Network.name} (chainId: ${l2Network.chainId})`
+      `Connected to L2 network: ${l2Network.name} (chainId: ${l2Network.chainId})`,
     );
 
     // Check balances before deposit
@@ -98,13 +99,18 @@ export async function depositEthCommand(args: string[]) {
     await checkBalance(l1Provider, sourceAddress, "Source (L1)");
     await checkBalance(l2Provider, l2TargetAddress, "Target (L2)");
 
+    addCustomNetwork({
+      customL1Network: l1Provider,
+      customL2Network: l2Network,
+    });
+
     // Get L2 network information
     let l2NetworkInfo: L2Network;
     try {
       l2NetworkInfo = await getL2Network(l2Provider);
     } catch (error) {
       console.log(
-        "Could not get L2 network info. Using default local network."
+        "Could not get L2 network info. Using default local network.",
       );
       let localNetwork = addDefaultLocalNetwork();
       l2NetworkInfo = localNetwork.l2Network;
@@ -127,13 +133,13 @@ export async function depositEthCommand(args: string[]) {
       await l1ToL2MessageGasEstimator.estimateSubmissionFee(
         l1Provider,
         l1BaseFee,
-        100000
+        100000,
       );
 
     console.log(
       `\nEstimated submission fee: ${ethers.utils.formatEther(
-        submissionPriceWei
-      )} ETH`
+        submissionPriceWei,
+      )} ETH`,
     );
 
     // Calculate gas price
@@ -147,8 +153,8 @@ export async function depositEthCommand(args: string[]) {
     console.log(
       `Current L1 gas price: ${ethers.utils.formatUnits(
         l1GasPrice,
-        "gwei"
-      )} gwei`
+        "gwei",
+      )} gwei`,
     );
 
     // Estimate gas for the transaction
@@ -160,16 +166,16 @@ export async function depositEthCommand(args: string[]) {
       .add(maxSubmissionCost)
       .add(gasPriceBid.mul(maxGas));
     console.log(
-      `Total ETH needed: ${ethers.utils.formatEther(valueToSend)} ETH`
+      `Total ETH needed: ${ethers.utils.formatEther(valueToSend)} ETH`,
     );
     console.log(` - Deposit amount: ${amount} ETH`);
     console.log(
       ` - Max submission cost: ${ethers.utils.formatEther(
-        maxSubmissionCost
-      )} ETH`
+        maxSubmissionCost,
+      )} ETH`,
     );
     console.log(
-      ` - L1 gas: ${ethers.utils.formatEther(gasPriceBid.mul(gasPriceBid))} ETH`
+      ` - L1 gas: ${ethers.utils.formatEther(gasPriceBid.mul(gasPriceBid))} ETH`,
     );
 
     // Check if we have enough balance
@@ -183,7 +189,7 @@ export async function depositEthCommand(args: string[]) {
 
     // Ask for confirmation
     console.log(
-      `\nReady to deposit ${amount} ETH from ${sourceAddress} to ${l2TargetAddress}`
+      `\nReady to deposit ${amount} ETH from ${sourceAddress} to ${l2TargetAddress}`,
     );
     console.log("Press Ctrl+C to cancel or wait 3 seconds to continue...");
 
@@ -199,7 +205,7 @@ export async function depositEthCommand(args: string[]) {
       value: valueToSend,
       data: ethers.utils.defaultAbiCoder.encode(
         ["address", "uint256", "uint256", "uint256", "uint256"],
-        [l2TargetAddress, amountWei, maxSubmissionCost, maxGas, gasPriceBid]
+        [l2TargetAddress, amountWei, maxSubmissionCost, maxGas, gasPriceBid],
       ),
       gasLimit: maxGas * 2n, // Give some extra gas for safety
     });
