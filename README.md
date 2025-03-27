@@ -1,11 +1,12 @@
 # Arb Wallet Scripts
 
-A TypeScript utility for interacting with Arbitrum wallets. This tool allows you to check balances and transfer WUETH (Wrapped Arbitrum ETH) between addresses on the Arbitrum network.
+A TypeScript utility for interacting with Arbitrum wallets and bridges. This tool allows you to check balances, transfer ETH between addresses on the Arbitrum network, and deposit ETH from Ethereum L1 to Arbitrum L2.
 
 ## Features
 
-- **Balance checking**: View account balances for one or more addresses
-- **Token transfers**: Securely transfer WUETH between addresses
+- **L2 Balance checking**: View account balances for one or more addresses on Arbitrum L2
+- **L2 ETH transfers**: Securely transfer ETH between addresses on Arbitrum
+- **L1 to L2 Deposits**: Deposit ETH from Ethereum L1 to Arbitrum L2
 - **Network information**: Display current network details and block number
 - **Gas estimation**: Calculate gas costs before executing transfers
 
@@ -13,14 +14,14 @@ A TypeScript utility for interacting with Arbitrum wallets. This tool allows you
 
 - Node.js (v16 or later)
 - npm or yarn
-- Arbitrum wallet address and private key (for transfers)
-- Access to an Arbitrum RPC endpoint
+- Ethereum and Arbitrum wallet addresses and private keys (for transfers/deposits)
+- Access to Ethereum L1 and Arbitrum L2 RPC endpoints
 
 ## Installation
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/yourusername/arb-wallet-scripts.git
+   git clone https://github.com/wurdum/arb-wallet-scripts.git
    cd arb-wallet-scripts
    ```
 
@@ -40,60 +41,68 @@ A TypeScript utility for interacting with Arbitrum wallets. This tool allows you
    ```
    SOURCE_ADDRESS=0x...      # Your source wallet address
    TARGET_ADDRESS=0x...      # Destination wallet address
-   SOURCE_PRIVATE_KEY=0x...  # Private key (required for transfers)
-   RPC_URL=http://...        # Arbitrum RPC endpoint URL
+   SOURCE_PRIVATE_KEY=0x...  # Private key (required for transfers/deposits)
+   RPC_URL=http://...        # Arbitrum L2 RPC endpoint URL
+   L1_RPC_URL=http://...     # Ethereum L1 RPC endpoint URL (for deposits)
    ```
 
 ## Usage
 
-### Check Wallet Balances
+### Check Arbitrum L2 Wallet Balances
 
 ```bash
 # Check balance using addresses from .env file
-npm start
+npm run dev -- l2balance
 
 # Check balance with specific address
-npm start -- balance 0xYourAddress
+npm run dev -- l2balance 0xYourAddress
 
 # Check balance of two addresses
-npm start -- balance 0xSourceAddress 0xTargetAddress
+npm run dev -- l2balance 0xSourceAddress 0xTargetAddress
 ```
 
-### Transfer WUETH
+### Transfer ETH on Arbitrum L2
 
 ```bash
-# Transfer default amount (0.01 WUETH)
-npm start -- transfer
+# Transfer default amount (0.01 ETH)
+npm run dev -- l2transfer
 
 # Transfer custom amount
-npm start -- transfer 0.05
+npm run dev -- l2transfer 0.05
 ```
 
-### Development Mode
-
-Run the application in development mode:
+### Deposit ETH from Ethereum L1 to Arbitrum L2
 
 ```bash
-npm run dev
-# or
-yarn dev
+# Deposit default amount (0.01 ETH)
+npm run dev -- l1deposit
+
+# Deposit custom amount
+npm run dev -- l1deposit 0.05
 ```
 
-### Build and Run
+## Available Commands
 
-1. Build the TypeScript code:
-   ```bash
-   npm run build
-   # or
-   yarn build
-   ```
+- `l2balance`: Check wallet balances on Arbitrum L2
+- `l2transfer`: Transfer ETH between addresses on Arbitrum L2
+- `l1deposit`: Deposit ETH from Ethereum L1 to Arbitrum L2
 
-2. Run the compiled application:
-   ```bash
-   npm start
-   # or
-   yarn start
-   ```
+## Build for Production
+
+Build the TypeScript code for production use:
+
+```bash
+npm run build
+# or
+yarn build
+```
+
+After building, you can run the compiled application:
+
+```bash
+node dist/index.js <command>
+# Example: node dist/index.js l2balance
+```
 
 ## Security Notes
 
@@ -103,5 +112,6 @@ yarn dev
 
 ## Configuration
 
-- Change the default RPC URL in the `.env` file to connect to different Arbitrum networks
+- Change the default RPC URLs in the `.env` file to connect to different Ethereum and Arbitrum networks
 - The application will use the local Arbitrum node (`http://127.0.0.1:8547`) if no RPC URL is provided
+- For L1 deposits, an Ethereum L1 RPC URL must be provided in the `.env` file

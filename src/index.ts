@@ -28,7 +28,7 @@ async function main() {
       break;
     default:
       console.error(`Unknown command: ${command}`);
-      console.log("Available commands: balance, transfer");
+      console.log("Available commands: l2balance, l2transfer, l1deposit");
       process.exit(1);
   }
 }
