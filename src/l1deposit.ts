@@ -1,15 +1,8 @@
 import { ethers } from "ethers";
 import {
-  L1ToL2MessageGasEstimator,
-  L1TransactionReceipt,
-  L2TransactionReceipt,
+  getArbitrumNetwork,
+  EthBridger,
 } from "@arbitrum/sdk";
-import {
-  getL2Network,
-  addDefaultLocalNetwork,
-  L2Network,
-  addCustomNetwork,
-} from "@arbitrum/sdk/dist/lib/dataEntities/networks";
 import { checkBalance } from "./balance";
 
 export async function depositEthCommand(args: string[]) {
@@ -99,91 +92,24 @@ export async function depositEthCommand(args: string[]) {
     await checkBalance(l1Provider, sourceAddress, "Source (L1)");
     await checkBalance(l2Provider, l2TargetAddress, "Target (L2)");
 
-    addCustomNetwork({
-      customL1Network: l1Provider,
-      customL2Network: l2Network,
-    });
-
-    // Get L2 network information
-    let l2NetworkInfo: L2Network;
-    try {
-      l2NetworkInfo = await getL2Network(l2Provider);
-    } catch (error) {
-      console.log(
-        "Could not get L2 network info. Using default local network.",
-      );
-      let localNetwork = addDefaultLocalNetwork();
-      l2NetworkInfo = localNetwork.l2Network;
-    }
+    // Get Arbitrum network information and create an EthBridger instance
+    const arbNetwork = await getArbitrumNetwork(l2Provider);
+    const ethBridger = new EthBridger(arbNetwork);
 
     // Convert amount to wei
     const amountWei = ethers.utils.parseEther(amount);
 
-    // Get inbox contract
-    const inbox = l2NetworkInfo.ethBridge.inbox;
-
-    // Estimate gas required for the deposit
-    const l1ToL2MessageGasEstimator = new L1ToL2MessageGasEstimator(l2Provider);
-
-    const l1BaseFee = await l1Provider.getGasPrice();
-
-    console.log("Current L1 base fee:", ethers.utils.formatEther(l1BaseFee));
-
-    const submissionPriceWei =
-      await l1ToL2MessageGasEstimator.estimateSubmissionFee(
-        l1Provider,
-        l1BaseFee,
-        100000,
-      );
-
-    console.log(
-      `\nEstimated submission fee: ${ethers.utils.formatEther(
-        submissionPriceWei,
-      )} ETH`,
-    );
-
-    // Calculate gas price
-    const l1FeeData = await l1Provider.getFeeData();
-    const l1GasPrice = l1FeeData.gasPrice;
-
-    if (!l1GasPrice) {
-      throw new Error("Failed to get L1 gas price");
-    }
-
-    console.log(
-      `Current L1 gas price: ${ethers.utils.formatUnits(
-        l1GasPrice,
-        "gwei",
-      )} gwei`,
-    );
-
-    // Estimate gas for the transaction
-    const maxGas = 100000n; // Typical gas limit for deposit
-    const gasPriceBid = l1GasPrice;
-    const maxSubmissionCost = submissionPriceWei;
-
-    const valueToSend = amountWei
-      .add(maxSubmissionCost)
-      .add(gasPriceBid.mul(maxGas));
-    console.log(
-      `Total ETH needed: ${ethers.utils.formatEther(valueToSend)} ETH`,
-    );
-    console.log(` - Deposit amount: ${amount} ETH`);
-    console.log(
-      ` - Max submission cost: ${ethers.utils.formatEther(
-        maxSubmissionCost,
-      )} ETH`,
-    );
-    console.log(
-      ` - L1 gas: ${ethers.utils.formatEther(gasPriceBid.mul(gasPriceBid))} ETH`,
-    );
-
     // Check if we have enough balance
     const l1Balance = await l1Provider.getBalance(sourceAddress);
-    if (l1Balance < valueToSend) {
+    // We'll need some extra for gas, so let's estimate roughly 1.2x the deposit amount
+    const estimatedTotal = amountWei.mul(12).div(10);
+
+    if (l1Balance.lt(estimatedTotal)) {
       console.error("Error: Insufficient funds for deposit + gas");
       console.log(`Available: ${ethers.utils.formatEther(l1Balance)} ETH`);
-      console.log(`Required: ${ethers.utils.formatEther(valueToSend)} ETH`);
+      console.log(
+        `Required: ~${ethers.utils.formatEther(estimatedTotal)} ETH (approximate)`,
+      );
       process.exit(1);
     }
 
@@ -199,44 +125,44 @@ export async function depositEthCommand(args: string[]) {
     // Send transaction
     console.log("\nSending deposit transaction...");
 
-    // Create transaction to deposit ETH
-    const tx = await l1Wallet.sendTransaction({
-      to: inbox,
-      value: valueToSend,
-      data: ethers.utils.defaultAbiCoder.encode(
-        ["address", "uint256", "uint256", "uint256", "uint256"],
-        [l2TargetAddress, amountWei, maxSubmissionCost, maxGas, gasPriceBid],
-      ),
-      gasLimit: maxGas * 2n, // Give some extra gas for safety
-    });
-
-    console.log(`Transaction sent! Hash: ${tx.hash}`);
-    console.log("Waiting for confirmation...");
-
-    // Wait for transaction to be mined
-    const receipt = await tx.wait();
-    console.log(`Transaction confirmed in block ${receipt?.blockNumber}`);
-
-    // Create L1 transaction receipt
-    const l1Receipt = new L1TransactionReceipt(receipt);
-
-    // Check if the deposit was successful
-    const depositMessages = await l1Receipt.getL1ToL2Messages(l2Provider);
-
-    if (depositMessages.length === 0) {
-      console.error("No deposit messages found in the transaction.");
-      process.exit(1);
+    let depositTx;
+    if (sourceAddress.toLowerCase() === l2TargetAddress.toLowerCase()) {
+      // If depositing to the same address, use the simpler deposit method
+      depositTx = await ethBridger.deposit({
+        amount: amountWei,
+        parentSigner: l1Wallet,
+      });
+    } else {
+      // If depositing to a different address, use depositTo
+      depositTx = await ethBridger.depositTo({
+        amount: amountWei,
+        parentSigner: l1Wallet,
+        childProvider: l2Provider,
+        destinationAddress: l2TargetAddress,
+      });
     }
 
+    console.log(`Transaction sent! Hash: ${depositTx.hash}`);
+    console.log("Waiting for confirmation...");
+
+    // Wait for transaction to be mined on L1
+    const receipt = await depositTx.wait();
+    console.log(`Transaction confirmed in block ${receipt.blockNumber}`);
+
+    // Wait for L2 confirmation
     console.log("\nDeposit message found! Waiting for execution on L2...");
+    const txResult = await receipt.waitForChildTransactionReceipt(l2Provider);
 
-    // Wait for the L2 message to be executed
-    const l2Receipt = await depositMessages[0].waitForStatus();
-
-    if (l2Receipt.status === 1) {
+    if (txResult.complete) {
       console.log("✅ Deposit successful! ETH is now available on L2.");
+      
+      if ('childTxReceipt' in txResult) {
+        console.log(`L2 transaction hash: ${txResult.childTxReceipt?.transactionHash}`);
+      }
     } else {
-      console.error("❌ Deposit failed. Message status:", l2Receipt.status);
+      console.error(
+        `❌ Deposit failed. Message status: ${txResult.message.status}`,
+      );
     }
 
     // Check balances after deposit

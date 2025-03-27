@@ -2,10 +2,14 @@ import * as dotenv from "dotenv";
 
 import { balanceCommand } from "./balance";
 import { transferCommand } from "./l2transfer";
-import { depositEthCommand } from "./l1transfer";
+import { depositEthCommand } from "./l1deposit";
+import { addSimulationNetworks } from "./networks";
 
 // Load environment variables
 dotenv.config();
+
+// Add simulation networks
+addSimulationNetworks();
 
 async function main() {
   // Get command and arguments
