@@ -1,8 +1,5 @@
 import { ethers } from "ethers";
-import {
-  getArbitrumNetwork,
-  EthBridger,
-} from "@arbitrum/sdk";
+import { getArbitrumNetwork, EthBridger } from "@arbitrum/sdk";
 import { checkBalance } from "./balance";
 
 export async function depositEthCommand(args: string[]) {
@@ -11,7 +8,6 @@ export async function depositEthCommand(args: string[]) {
 
   // Get addresses and private key from environment variables
   const sourceAddress: string = process.env.SOURCE_ADDRESS || "";
-  const targetAddress: string = process.env.TARGET_ADDRESS || "";
   const sourcePrivateKey: string = process.env.SOURCE_PRIVATE_KEY || "";
 
   // L1 provider is required for this operation
@@ -37,8 +33,28 @@ export async function depositEthCommand(args: string[]) {
     process.exit(1);
   }
 
-  // If no target address provided, use source address
-  const l2TargetAddress = targetAddress || sourceAddress;
+  // Parse command-line arguments
+  let amount = "0.01"; // Default amount
+  let targetAddress = ""; // Will be determined based on flags/args
+  let depositToSelf = true; // Default behavior
+
+  // Process arguments
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === "--self") {
+      depositToSelf = true;
+    } else if (ethers.utils.isAddress(args[i])) {
+      targetAddress = args[i];
+      depositToSelf = false;
+    } else if (!isNaN(parseFloat(args[i]))) {
+      // If it's a number, treat it as the amount
+      amount = args[i];
+    }
+  }
+
+  // If --self flag is true or no target address provided, use source address
+  if (depositToSelf || !targetAddress) {
+    targetAddress = sourceAddress;
+  }
 
   // Validate Ethereum addresses
   if (!ethers.utils.isAddress(sourceAddress)) {
@@ -46,19 +62,13 @@ export async function depositEthCommand(args: string[]) {
     process.exit(1);
   }
 
-  if (!ethers.utils.isAddress(l2TargetAddress)) {
+  if (!ethers.utils.isAddress(targetAddress)) {
     console.error("Invalid target Ethereum address.");
     process.exit(1);
   }
 
-  // Parse amount from args or use default
-  let amount = "0.01"; // Default amount
-  if (args.length >= 1) {
-    amount = args[0];
-  }
-
   console.log(`Source address (L1): ${sourceAddress}`);
-  console.log(`Target address (L2): ${l2TargetAddress}`);
+  console.log(`Target address (L2): ${targetAddress}`);
   console.log(`Amount to deposit: ${amount} ETH\n`);
 
   try {
@@ -90,7 +100,7 @@ export async function depositEthCommand(args: string[]) {
     // Check balances before deposit
     console.log("\nBalances before deposit:");
     await checkBalance(l1Provider, sourceAddress, "Source (L1)");
-    await checkBalance(l2Provider, l2TargetAddress, "Target (L2)");
+    await checkBalance(l2Provider, targetAddress, "Target (L2)");
 
     // Get Arbitrum network information and create an EthBridger instance
     const arbNetwork = await getArbitrumNetwork(l2Provider);
@@ -115,7 +125,7 @@ export async function depositEthCommand(args: string[]) {
 
     // Ask for confirmation
     console.log(
-      `\nReady to deposit ${amount} ETH from ${sourceAddress} to ${l2TargetAddress}`,
+      `\nReady to deposit ${amount} ETH from ${sourceAddress} to ${targetAddress}`,
     );
     console.log("Press Ctrl+C to cancel or wait 3 seconds to continue...");
 
@@ -126,7 +136,7 @@ export async function depositEthCommand(args: string[]) {
     console.log("\nSending deposit transaction...");
 
     let depositTx;
-    if (sourceAddress.toLowerCase() === l2TargetAddress.toLowerCase()) {
+    if (sourceAddress.toLowerCase() === targetAddress.toLowerCase()) {
       // If depositing to the same address, use the simpler deposit method
       depositTx = await ethBridger.deposit({
         amount: amountWei,
@@ -138,7 +148,7 @@ export async function depositEthCommand(args: string[]) {
         amount: amountWei,
         parentSigner: l1Wallet,
         childProvider: l2Provider,
-        destinationAddress: l2TargetAddress,
+        destinationAddress: targetAddress,
       });
     }
 
@@ -155,9 +165,11 @@ export async function depositEthCommand(args: string[]) {
 
     if (txResult.complete) {
       console.log("✅ Deposit successful! ETH is now available on L2.");
-      
-      if ('childTxReceipt' in txResult) {
-        console.log(`L2 transaction hash: ${txResult.childTxReceipt?.transactionHash}`);
+
+      if ("childTxReceipt" in txResult) {
+        console.log(
+          `L2 transaction hash: ${txResult.childTxReceipt?.transactionHash}`,
+        );
       }
     } else {
       console.error(
@@ -168,7 +180,7 @@ export async function depositEthCommand(args: string[]) {
     // Check balances after deposit
     console.log("\nBalances after deposit:");
     await checkBalance(l1Provider, sourceAddress, "Source (L1)");
-    await checkBalance(l2Provider, l2TargetAddress, "Target (L2)");
+    await checkBalance(l2Provider, targetAddress, "Target (L2)");
   } catch (error) {
     console.error("Error during deposit:", error);
     process.exit(1);

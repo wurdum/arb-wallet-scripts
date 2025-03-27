@@ -7,7 +7,7 @@ export async function transferCommand(args: string[]) {
 
   // Get addresses and private key from environment variables
   const sourceAddress: string = process.env.SOURCE_ADDRESS || "";
-  const targetAddress: string = process.env.TARGET_ADDRESS || "";
+  const defaultTargetAddress: string = process.env.TARGET_ADDRESS || "";
   const sourcePrivateKey: string = process.env.SOURCE_PRIVATE_KEY || "";
 
   if (!sourceAddress) {
@@ -16,15 +16,33 @@ export async function transferCommand(args: string[]) {
     process.exit(1);
   }
 
-  if (!targetAddress) {
-    console.error("Error: TARGET_ADDRESS environment variable is required");
-    console.log("Please set TARGET_ADDRESS in your .env file");
-    process.exit(1);
-  }
-
   if (!sourcePrivateKey) {
     console.error("Error: SOURCE_PRIVATE_KEY is required for transfers");
     console.log("Please set SOURCE_PRIVATE_KEY in your .env file");
+    process.exit(1);
+  }
+
+  // Parse command-line arguments
+  let amount = "0.01"; // Default amount
+  let targetAddress = defaultTargetAddress; // Default from .env
+
+  // Process arguments
+  for (let i = 0; i < args.length; i++) {
+    if (ethers.utils.isAddress(args[i])) {
+      // If the argument is an Ethereum address, use it as the target address
+      targetAddress = args[i];
+    } else if (!isNaN(parseFloat(args[i]))) {
+      // If it's a number, treat it as the amount
+      amount = args[i];
+    }
+  }
+
+  // Validate we have a target address
+  if (!targetAddress) {
+    console.error("Error: Target address is required");
+    console.log(
+      "Please set TARGET_ADDRESS in your .env file or provide it as an argument",
+    );
     process.exit(1);
   }
 
@@ -37,12 +55,6 @@ export async function transferCommand(args: string[]) {
   if (!ethers.utils.isAddress(targetAddress)) {
     console.error("Invalid target Ethereum address.");
     process.exit(1);
-  }
-
-  // Parse amount from args or use default
-  let amount = "0.01"; // Default amount
-  if (args.length >= 1) {
-    amount = args[0];
   }
 
   console.log(`Source address: ${sourceAddress}`);
@@ -67,7 +79,7 @@ export async function transferCommand(args: string[]) {
     // Get network information
     const network = await provider.getNetwork();
     console.log(
-      `Connected to network: ${network.name} (chainId: ${network.chainId})`
+      `Connected to network: ${network.name} (chainId: ${network.chainId})`,
     );
 
     // Check balances before transfer
@@ -75,7 +87,7 @@ export async function transferCommand(args: string[]) {
     const sourceBalanceBefore = await checkBalance(
       provider,
       sourceAddress,
-      "Source"
+      "Source",
     );
     await checkBalance(provider, targetAddress, "Target");
 
@@ -88,7 +100,7 @@ export async function transferCommand(args: string[]) {
     }
 
     console.log(
-      `\nCurrent gas price: ${ethers.utils.formatUnits(gasPrice, "gwei")} gwei`
+      `\nCurrent gas price: ${ethers.utils.formatUnits(gasPrice, "gwei")} gwei`,
     );
 
     // Convert amount to wei
@@ -106,7 +118,7 @@ export async function transferCommand(args: string[]) {
     // Calculate transaction fee
     const txFee = BigNumber.from(estimatedGas).mul(gasPrice);
     console.log(
-      `Estimated transaction fee: ${ethers.utils.formatEther(txFee)} WUETH`
+      `Estimated transaction fee: ${ethers.utils.formatEther(txFee)} WUETH`,
     );
 
     // Check if we have enough balance
@@ -116,19 +128,19 @@ export async function transferCommand(args: string[]) {
       console.log(`Available: ${sourceBalanceBefore} WUETH`);
       console.log(
         `Required: ${ethers.utils.formatEther(
-          totalNeeded
-        )} WUETH (${amount} + ${ethers.utils.formatEther(txFee)} gas)`
+          totalNeeded,
+        )} WUETH (${amount} + ${ethers.utils.formatEther(txFee)} gas)`,
       );
       process.exit(1);
     }
 
     // Ask for confirmation
     console.log(
-      `\nReady to transfer ${amount} WUETH from ${sourceAddress} to ${targetAddress}`
+      `\nReady to transfer ${amount} WUETH from ${sourceAddress} to ${targetAddress}`,
     );
     console.log("Press Ctrl+C to cancel or wait 3 seconds to continue...");
 
-    // Wait for 5 seconds before proceeding
+    // Wait for 3 seconds before proceeding
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
     // Send transaction
