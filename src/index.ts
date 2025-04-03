@@ -3,6 +3,7 @@ import * as dotenv from "dotenv";
 import { balanceCommand } from "./balance";
 import { transferCommand } from "./l2transfer";
 import { depositEthCommand } from "./l1deposit";
+import { callStylusCommand } from "./callstylus";
 import { addSimulationNetworks } from "./networks";
 
 // Load environment variables
@@ -26,9 +27,14 @@ async function main() {
     case "l1deposit":
       await depositEthCommand(args);
       break;
+    case "callstylus":
+      await callStylusCommand(args);
+      break;
     default:
       console.error(`Unknown command: ${command}`);
-      console.log("Available commands: l2balance, l2transfer, l1deposit");
+      console.log(
+        "Available commands: l2balance, l2transfer, l1deposit, callstylus",
+      );
       process.exit(1);
   }
 }

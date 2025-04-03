@@ -7,6 +7,7 @@ A TypeScript utility for interacting with Arbitrum wallets and bridges. This too
 - **L2 Balance checking**: View account balances for one or more addresses on Arbitrum L2
 - **L2 ETH transfers**: Securely transfer ETH between addresses on Arbitrum
 - **L1 to L2 Deposits**: Deposit ETH from Ethereum L1 to Arbitrum L2
+- **Stylus Contract Interaction**: Call functions on Stylus contracts deployed to Arbitrum
 - **Network information**: Display current network details and block number
 - **Gas estimation**: Calculate gas costs before executing transfers
 
@@ -42,6 +43,7 @@ A TypeScript utility for interacting with Arbitrum wallets and bridges. This too
    SOURCE_ADDRESS=0x...      # Your source wallet address
    TARGET_ADDRESS=0x...      # Destination wallet address
    SOURCE_PRIVATE_KEY=0x...  # Private key (required for transfers/deposits)
+   COUNTER_CONTRACT_ADDRESS=0x... # Address of the deployed Stylus counter contract
    RPC_URL=http://...        # Arbitrum L2 RPC endpoint URL
    L1_RPC_URL=http://...     # Ethereum L1 RPC endpoint URL (for deposits)
    ```
@@ -52,33 +54,53 @@ A TypeScript utility for interacting with Arbitrum wallets and bridges. This too
 
 ```bash
 # Check balance using addresses from .env file
-npm run dev -- l2balance
+npm run dev l2balance
 
 # Check balance with specific address
-npm run dev -- l2balance 0xYourAddress
+npm run dev l2balance 0xYourAddress
 
 # Check balance of two addresses
-npm run dev -- l2balance 0xSourceAddress 0xTargetAddress
+npm run dev l2balance 0xSourceAddress 0xTargetAddress
 ```
 
 ### Transfer ETH on Arbitrum L2
 
 ```bash
 # Transfer default amount (0.01 ETH)
-npm run dev -- l2transfer
+npm run dev l2transfer
 
 # Transfer custom amount
-npm run dev -- l2transfer 0.05
+npm run dev l2transfer 0.05
 ```
 
 ### Deposit ETH from Ethereum L1 to Arbitrum L2
 
 ```bash
 # Deposit default amount (0.01 ETH)
-npm run dev -- l1deposit
+npm run dev l1deposit
 
 # Deposit custom amount
-npm run dev -- l1deposit 0.05
+npm run dev l1deposit 0.05
+```
+
+### Interact with Stylus Contracts
+
+The `callstylus` command allows you to call functions on your deployed Stylus contracts. The command uses a syntax similar to the `cast` tool.
+
+```bash
+# Call a view function to read state
+npm run dev callstylus "number()(uint256)"
+
+# Call a state-modifying function
+npm run dev callstylus "increment()"
+
+# Call a function with arguments
+npm run dev callstylus "setNumber(42)"
+npm run dev callstylus "addNumber(5)"
+npm run dev callstylus "mulNumber(3)"
+
+# Call a payable function with ETH
+npm run dev callstylus "addFromMsgValue()" 0.1
 ```
 
 ## Available Commands
@@ -86,6 +108,7 @@ npm run dev -- l1deposit 0.05
 - `l2balance`: Check wallet balances on Arbitrum L2
 - `l2transfer`: Transfer ETH between addresses on Arbitrum L2
 - `l1deposit`: Deposit ETH from Ethereum L1 to Arbitrum L2
+- `callstylus`: Interact with Stylus contracts deployed on Arbitrum
 
 ## Build for Production
 
@@ -115,3 +138,4 @@ node dist/index.js <command>
 - Change the default RPC URLs in the `.env` file to connect to different Ethereum and Arbitrum networks
 - The application will use the local Arbitrum node (`http://127.0.0.1:8547`) if no RPC URL is provided
 - For L1 deposits, an Ethereum L1 RPC URL must be provided in the `.env` file
+- Set the `COUNTER_CONTRACT_ADDRESS` to interact with your deployed Stylus counter contract
