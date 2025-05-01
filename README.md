@@ -8,6 +8,7 @@ A TypeScript utility for interacting with Arbitrum wallets and bridges. This too
 - **L2 ETH transfers**: Securely transfer ETH between addresses on Arbitrum
 - **L1 to L2 Deposits**: Deposit ETH from Ethereum L1 to Arbitrum L2
 - **Stylus Contract Interaction**: Call functions on Stylus contracts deployed to Arbitrum
+- **L1 to L2 Stylus Calls**: Send transactions to Stylus contracts from L1 to L2
 - **Network information**: Display current network details and block number
 - **Gas estimation**: Calculate gas costs before executing transfers
 
@@ -103,12 +104,29 @@ npm run dev callstylus "mulNumber(3)"
 npm run dev callstylus "addFromMsgValue()" 0.1
 ```
 
+### Call Stylus Contracts from L1
+
+The `l1tostylus` command allows you to call functions on your Stylus contracts from L1. The transaction is sent to L1 and then automatically forwarded to L2.
+
+```bash
+# Call a state-modifying function from L1
+npm run dev l1tostylus "increment()"
+
+# Call a function with arguments from L1
+npm run dev l1tostylus "setNumber(42)"
+npm run dev l1tostylus "addNumber(5)"
+
+# Call a payable function with ETH from L1
+npm run dev l1tostylus "addFromMsgValue()" 0.1
+```
+
 ## Available Commands
 
 - `l2balance`: Check wallet balances on Arbitrum L2
 - `l2transfer`: Transfer ETH between addresses on Arbitrum L2
 - `l1deposit`: Deposit ETH from Ethereum L1 to Arbitrum L2
 - `callstylus`: Interact with Stylus contracts deployed on Arbitrum
+- `l1tostylus`: Call Stylus contract functions from L1 to L2
 
 ## Build for Production
 
@@ -137,5 +155,5 @@ node dist/index.js <command>
 
 - Change the default RPC URLs in the `.env` file to connect to different Ethereum and Arbitrum networks
 - The application will use the local Arbitrum node (`http://127.0.0.1:8547`) if no RPC URL is provided
-- For L1 deposits, an Ethereum L1 RPC URL must be provided in the `.env` file
+- For L1 deposits and L1-to-L2 calls, an Ethereum L1 RPC URL must be provided in the `.env` file
 - Set the `COUNTER_CONTRACT_ADDRESS` to interact with your deployed Stylus counter contract
