@@ -31,7 +31,7 @@ async function main() {
     case "callstylus":
       await callStylusCommand(args);
       break;
-    case "l1tostylusCall":
+    case "l1tostylus":
       await l1ToStylusCallCommand(args);
       break;
     default:

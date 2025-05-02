@@ -164,38 +164,92 @@ export async function l1ToStylusCallCommand(args: string[]) {
     // Get Arbitrum network information
     const arbNetwork = await getArbitrumNetwork(l2Provider);
 
-    // Estimate gas required for the L1-to-L2 transaction
+    // For L1FundedContractTransaction, we need to estimate L2 gas
     console.log("\nEstimating gas required for L1-to-L2 transaction...");
-    const gasEstimator = new ParentToChildMessageGasEstimator(l2Provider);
 
-    const gasEstimationResult = await gasEstimator.estimateAll(
-      {
-        from: sourceAddress,
-        to: contractAddress,
-        l2CallValue: valueWei,
-        excessFeeRefundAddress: sourceAddress,
-        callValueRefundAddress: sourceAddress,
-        data: calldata,
-      },
-      await l1Provider.getGasPrice(),
-      l1Provider,
-    );
-
-    console.log(`Gas estimation complete:`);
-    console.log(
-      `Max submission cost: ${ethers.utils.formatEther(gasEstimationResult.maxSubmissionCost.toString())} ETH`,
-    );
-
-    // Check if we have enough balance for the transaction
-    const l1Balance = await l1Provider.getBalance(sourceAddress);
-    if (l1Balance.lt(gasEstimationResult.maxSubmissionCost)) {
-      console.error("Error: Insufficient L1 funds for transaction");
-      console.log(`Available: ${ethers.utils.formatEther(l1Balance)} ETH`);
-      console.log(
-        `Required: ${ethers.utils.formatEther(gasEstimationResult.maxSubmissionCost)} ETH`,
+    // Fetching base fee for Parent chain
+    const latestBlock = await l1Provider.getBlock("latest");
+    const l1BaseFee = latestBlock.baseFeePerGas;
+    if (!l1BaseFee) {
+      console.error(
+        "Could not retrieve L1 base fee (perhaps network doesn't support EIP-1559 or there was an error).",
       );
       process.exit(1);
     }
+
+    console.log(
+      `Current L1 Base Fee: ${ethers.utils.formatUnits(l1BaseFee, "gwei")} gwei`,
+    );
+
+    const gasEstimator = new ParentToChildMessageGasEstimator(l2Provider);
+    const estimates = await gasEstimator.estimateAll(
+      {
+        from: l1Wallet.address,
+        to: contractAddress,
+        l2CallValue: valueWei,
+        excessFeeRefundAddress: l1Wallet.address,
+        callValueRefundAddress: l1Wallet.address,
+        data: calldata,
+      },
+      l1BaseFee,
+      l1Provider,
+    );
+
+    console.log(`L2 Gas Limit estimate: ${estimates.gasLimit.toString()}`);
+    console.log(
+      `L2 Max Fee per Gas estimate: ${ethers.utils.formatUnits(estimates.maxFeePerGas, "gwei")} gwei`,
+    );
+    console.log(
+      `L1 Submission Fee estimate: ${ethers.utils.formatEther(estimates.maxSubmissionCost)} ETH`,
+    );
+    console.log(
+      `Total Deposit required (value for L1 tx): ${ethers.utils.formatEther(estimates.deposit)} ETH`,
+    );
+
+    // Check if we have enough L1 balance for the total deposit
+    const l1Balance = await l1Provider.getBalance(l1Wallet.address);
+    if (l1Balance.lt(estimates.deposit)) {
+      console.error("Error: Insufficient L1 funds for the required deposit");
+      console.log(`Available: ${ethers.utils.formatEther(l1Balance)} ETH`);
+      console.log(
+        `Required: ${ethers.utils.formatEther(estimates.deposit)} ETH`,
+      );
+      process.exit(1);
+    }
+
+    // Create the inbox interface
+    const inbox = arbNetwork.ethBridge.inbox;
+    const inboxInterface = new ethers.utils.Interface([
+      "function sendL1FundedContractTransaction(uint256 gasLimit, uint256 maxFeePerGas, address to, bytes calldata data) external payable returns (uint256)",
+    ]);
+
+    // Create the parameters for sendL1FundedContractTransaction
+    const params = {
+      gasLimit: estimates.gasLimit,
+      maxFeePerGas: estimates.maxFeePerGas,
+      to: contractAddress,
+      data: calldata,
+    };
+
+    // Encode the function call
+    const increasedGasLimit = params.gasLimit.mul(5);
+    const inboxCalldata = inboxInterface.encodeFunctionData(
+      "sendL1FundedContractTransaction",
+      [increasedGasLimit, params.maxFeePerGas, params.to, params.data],
+    );
+
+    console.log("\nEstimating L1 gas limit for Inbox call...");
+    const l1GasEstimate = await l1Provider.estimateGas({
+      to: inbox,
+      from: l1Wallet.address, // Important for accurate estimation
+      data: inboxCalldata,
+      value: estimates.deposit, // Must include the required value for estimation
+    });
+    console.log(`Estimated L1 gas limit: ${l1GasEstimate.toString()}`);
+
+    // Optional: Add a buffer to the L1 gas estimate for safety
+    const l1GasLimitWithBuffer = l1GasEstimate.mul(120).div(100); // Add 20% buffer
+    console.log(`L1 gas limit with buffer: ${l1GasLimitWithBuffer.toString()}`);
 
     // Ask for confirmation before proceeding
     console.log(
@@ -204,52 +258,14 @@ export async function l1ToStylusCallCommand(args: string[]) {
     console.log("Press Ctrl+C to cancel or wait 3 seconds to continue...");
     await new Promise((resolve) => setTimeout(resolve, 3000));
 
-    // Generate retryable ticket parameters
-    console.log("\nCreating L1-to-L2 transaction...");
-
-    // Create the inbox interface
-    const inbox = arbNetwork.ethBridge.inbox;
-    const inboxInterface = new ethers.utils.Interface([
-      "function createRetryableTicket(address to, uint256 l2CallValue, uint256 maxSubmissionCost, address excessFeeRefundAddress, address callValueRefundAddress, uint256 gasLimit, uint256 maxFeePerGas, bytes calldata data) external payable returns (uint256)",
-    ]);
-
-    // Create the parameters for the retryable ticket
-    const params = {
-      to: contractAddress,
-      l2CallValue: valueWei,
-      maxSubmissionCost: gasEstimationResult.maxSubmissionCost,
-      excessFeeRefundAddress: sourceAddress,
-      callValueRefundAddress: sourceAddress,
-      gasLimit: gasEstimationResult.gasLimit,
-      maxFeePerGas: gasEstimationResult.maxFeePerGas,
-      data: calldata,
-    };
-
-    // Encode the function call
-    const inboxCalldata = inboxInterface.encodeFunctionData(
-      "createRetryableTicket",
-      [
-        params.to,
-        params.l2CallValue,
-        params.maxSubmissionCost,
-        params.excessFeeRefundAddress,
-        params.callValueRefundAddress,
-        params.gasLimit,
-        params.maxFeePerGas,
-        params.data,
-      ],
-    );
-
-    // Calculate the total deposit required (callvalue + gas + submission cost)
-    const requiredValue = valueWei
-      .add(params.maxSubmissionCost)
-      .add(params.gasLimit.mul(params.maxFeePerGas));
+    console.log("\nSending L1-to-L2 transaction...");
 
     // Send the transaction
     const tx = await l1Wallet.sendTransaction({
       to: inbox,
       data: inboxCalldata,
-      value: requiredValue,
+      value: valueWei,
+      gasLimit: l1GasLimitWithBuffer,
     });
 
     console.log(`Transaction sent! Hash: ${tx.hash}`);

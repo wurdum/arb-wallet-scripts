@@ -106,7 +106,7 @@ npm run dev callstylus "addFromMsgValue()" 0.1
 
 ### Call Stylus Contracts from L1
 
-The `l1tostylus` command allows you to call functions on your Stylus contracts from L1. The transaction is sent to L1 and then automatically forwarded to L2.
+The `l1tostylus` command allows you to call functions on your Stylus contracts from L1. The transaction is sent to L1 and then automatically forwarded to L2 using the `sendL1FundedContractTransaction` method of the Arbitrum Inbox contract.
 
 ```bash
 # Call a state-modifying function from L1
@@ -119,6 +119,8 @@ npm run dev l1tostylus "addNumber(5)"
 # Call a payable function with ETH from L1
 npm run dev l1tostylus "addFromMsgValue()" 0.1
 ```
+
+This command uses the efficient `sendL1FundedContractTransaction` method instead of `createRetryableTicket`, which simplifies the process of funding contract calls from L1. It handles gas estimation, transaction creation, and tracking the message across the L1-L2 bridge.
 
 ## Available Commands
 
