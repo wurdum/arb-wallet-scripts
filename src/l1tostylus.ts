@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import {
   getArbitrumNetwork,
+  Address,
   ParentToChildMessageGasEstimator,
   ParentToChildMessageStatus,
   ParentTransactionReceipt,
@@ -158,8 +159,9 @@ export async function l1ToStylusCallCommand(args: string[]) {
 
     // Check balances before the call
     console.log("\nBalances before L1-to-L2 call:");
-    await checkBalance(l1Provider, sourceAddress, "Source (L1)");
-    await checkBalance(l2Provider, sourceAddress, "Source (L2)");
+    const l2walletAddress = new Address(l1Wallet.address).applyAlias().value;
+    await checkBalance(l1Provider, sourceAddress, "Source (L1)", "ETH");
+    await checkBalance(l2Provider, l2walletAddress, "Source (L2)", "WUETH");
 
     // Get Arbitrum network information
     const arbNetwork = await getArbitrumNetwork(l2Provider);
@@ -206,13 +208,30 @@ export async function l1ToStylusCallCommand(args: string[]) {
       `Total Deposit required (value for L1 tx): ${ethers.utils.formatEther(estimates.deposit)} ETH`,
     );
 
+    // Total value to send along the transaction includes value sent to L2 plus estimated deposit value for L1 to L2 transfer.
+    const l1WalletBalanceRequirement = valueWei.add(estimates.deposit);
+    const l2WalletBalanceRequirement = estimates.gasLimit.mul(
+      estimates.maxFeePerGas,
+    );
+
     // Check if we have enough L1 balance for the total deposit
     const l1Balance = await l1Provider.getBalance(l1Wallet.address);
-    if (l1Balance.lt(estimates.deposit)) {
+    if (l1Balance.lt(l1WalletBalanceRequirement)) {
       console.error("Error: Insufficient L1 funds for the required deposit");
       console.log(`Available: ${ethers.utils.formatEther(l1Balance)} ETH`);
       console.log(
-        `Required: ${ethers.utils.formatEther(estimates.deposit)} ETH`,
+        `Required: ${ethers.utils.formatEther(l1WalletBalanceRequirement)} ETH`,
+      );
+      process.exit(1);
+    }
+
+    // Check if we have enough L2 balance for contract call
+    const l2balance = await l2Provider.getBalance(l2walletAddress);
+    if (l2balance.lt(l2WalletBalanceRequirement)) {
+      console.error("Error: Insufficient L2 funds for the required deposit");
+      console.log(`Available: ${ethers.utils.formatEther(l2balance)} ETH`);
+      console.log(
+        `Required: ${ethers.utils.formatEther(l2WalletBalanceRequirement)} ETH`,
       );
       process.exit(1);
     }
@@ -232,10 +251,9 @@ export async function l1ToStylusCallCommand(args: string[]) {
     };
 
     // Encode the function call
-    const increasedGasLimit = params.gasLimit.mul(5);
     const inboxCalldata = inboxInterface.encodeFunctionData(
       "sendL1FundedContractTransaction",
-      [increasedGasLimit, params.maxFeePerGas, params.to, params.data],
+      [params.gasLimit, params.maxFeePerGas, params.to, params.data],
     );
 
     console.log("\nEstimating L1 gas limit for Inbox call...");
@@ -243,7 +261,7 @@ export async function l1ToStylusCallCommand(args: string[]) {
       to: inbox,
       from: l1Wallet.address, // Important for accurate estimation
       data: inboxCalldata,
-      value: estimates.deposit, // Must include the required value for estimation
+      value: valueWei.add(estimates.deposit), // Must include the required value for estimation
     });
     console.log(`Estimated L1 gas limit: ${l1GasEstimate.toString()}`);
 

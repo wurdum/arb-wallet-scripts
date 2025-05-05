@@ -3,12 +3,13 @@ import { ethers } from "ethers";
 export async function checkBalance(
   provider: ethers.providers.JsonRpcProvider,
   address: string,
-  label: string = "Address"
+  label: string = "Address",
+  token: string = "WUETH",
 ): Promise<string> {
   // Get balance for address
   const balance = await provider.getBalance(address);
   const balanceFormatted = ethers.utils.formatEther(balance);
-  console.log(`${label} Balance (${address}): ${balanceFormatted} WUETH`);
+  console.log(`${label} Balance (${address}): ${balanceFormatted} ${token}`);
   return balanceFormatted;
 }
 
@@ -32,7 +33,7 @@ export async function balanceCommand(args: string[]) {
   if (!sourceAddress) {
     console.error("Error: Source address is required");
     console.log(
-      "Please set SOURCE_ADDRESS in your .env file or provide as an argument"
+      "Please set SOURCE_ADDRESS in your .env file or provide as an argument",
     );
     process.exit(1);
   }
@@ -57,7 +58,7 @@ export async function balanceCommand(args: string[]) {
     // Get network information
     const network = await provider.getNetwork();
     console.log(
-      `Connected to network: ${network.name} (chainId: ${network.chainId})`
+      `Connected to network: ${network.name} (chainId: ${network.chainId})`,
     );
 
     // Get source balance
