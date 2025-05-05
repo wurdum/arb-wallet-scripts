@@ -293,52 +293,10 @@ export async function l1ToStylusCallCommand(args: string[]) {
     const receipt = await tx.wait();
     console.log(`L1 transaction confirmed in block ${receipt.blockNumber}`);
 
-    // Wait for L2 message
-    console.log("\nTracking L1-to-L2 message...");
-    const l1TxReceipt = new ParentTransactionReceipt(receipt);
-
-    // Get the messages that were sent by the L1 transaction
-    const messages = await l1TxReceipt.getParentToChildMessages(l2Provider);
-    if (messages.length === 0) {
-      console.error("No L1-to-L2 messages found in the transaction");
-      process.exit(1);
-    }
-
-    const message = messages[0];
-    console.log(`L1-to-L2 message status: ${await message.status()}`);
-
-    // Wait for message to be executed on L2
-    console.log("Waiting for L2 execution (this may take a few minutes)...");
-    const messageResult = await message.waitForStatus();
-
-    if (messageResult.status === ParentToChildMessageStatus.REDEEMED) {
-      console.log("✅ L1-to-L2 message successfully executed on L2!");
-      console.log(
-        `L2 transaction hash: ${messageResult.childTxReceipt.transactionHash}`,
-      );
-
-      // Try to query the updated state
-      try {
-        const contract = new ethers.Contract(
-          contractAddress,
-          counterAbi,
-          l2Provider,
-        );
-        const newState = await contract.number();
-        console.log(`New counter value: ${newState.toString()}`);
-      } catch (error) {
-        console.log("Could not retrieve updated counter value");
-      }
-    } else {
-      console.error(
-        `❌ L1-to-L2 message execution failed. Status: ${messageResult.status}`,
-      );
-    }
-
     // Check balances after the call
     console.log("\nBalances after L1-to-L2 call:");
-    await checkBalance(l1Provider, sourceAddress, "Source (L1)");
-    await checkBalance(l2Provider, sourceAddress, "Source (L2)");
+    await checkBalance(l1Provider, sourceAddress, "Source (L1)", "ETH");
+    await checkBalance(l2Provider, l2walletAddress, "Source (L2)", "WUETH");
   } catch (error) {
     console.error("Error during L1-to-L2 contract call:", error);
     process.exit(1);
